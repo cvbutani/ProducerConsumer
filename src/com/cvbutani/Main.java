@@ -9,6 +9,7 @@ package com.cvbutani;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.cvbutani.Main.EOF;
@@ -32,13 +33,35 @@ public class Main {
         // until they're convinced the simple tools are inadequate.) As always, make it right first, and then worry about
         // whether or not you have to make it faster.
 
+        ExecutorService ex = Executors.newFixedThreadPool(3);
         MyProducer producer = new MyProducer(buffer, ThreadColor.ANSI_BLUE, bufferLock);
         MyConsumer consumer1 = new MyConsumer(buffer, ThreadColor.ANSI_RED, bufferLock);
         MyConsumer consumer2 = new MyConsumer(buffer, ThreadColor.ANSI_GREEN, bufferLock);
 
-        new Thread(producer).start();
-        new Thread(consumer1).start();
-        new Thread(consumer2).start();
+        ex.execute(producer);
+        ex.execute(consumer1);
+        ex.execute(consumer2);
+        Future<String> future = ex.submit(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                System.out.println(ThreadColor.ANSI_CYAN + "Collable class is being interrupted");
+                return "This is callable result";
+            }
+        });
+
+        try {
+            System.out.println(future.get());
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        ex.shutdown();
+
+//        new Thread(producer).start();
+//        new Thread(consumer1).start();
+//        new Thread(consumer2).start();
     }
 }
 
