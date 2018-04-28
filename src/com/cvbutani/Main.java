@@ -19,7 +19,11 @@ public class Main {
     public static final String EOF = "EOF";
 
     public static void main(String[] args) {
-        List<String> buffer = new ArrayList<>();
+//        List<String> buffer = new ArrayList<>();
+        ArrayBlockingQueue<String> buffer = new ArrayBlockingQueue<String>(5);
+
+        //  ArrayBlockingQueue : while using this package, you need to remove ReentrantLock if you are using it.
+        //  It will replace Arraylist/List and ReentrantLock.
 
         ReentrantLock bufferLock = new ReentrantLock();
 
@@ -34,9 +38,9 @@ public class Main {
         // whether or not you have to make it faster.
 
         ExecutorService ex = Executors.newFixedThreadPool(3);
-        MyProducer producer = new MyProducer(buffer, ThreadColor.ANSI_BLUE, bufferLock);
-        MyConsumer consumer1 = new MyConsumer(buffer, ThreadColor.ANSI_RED, bufferLock);
-        MyConsumer consumer2 = new MyConsumer(buffer, ThreadColor.ANSI_GREEN, bufferLock);
+        MyProducer producer = new MyProducer(buffer, ThreadColor.ANSI_BLUE);
+        MyConsumer consumer1 = new MyConsumer(buffer, ThreadColor.ANSI_RED);
+        MyConsumer consumer2 = new MyConsumer(buffer, ThreadColor.ANSI_GREEN);
 
         ex.execute(producer);
         ex.execute(consumer1);
@@ -51,9 +55,7 @@ public class Main {
 
         try {
             System.out.println(future.get());
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
+        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
 
@@ -67,14 +69,13 @@ public class Main {
 
 class MyProducer implements Runnable {
 
-    private List<String> buffer;
+    private ArrayBlockingQueue<String> buffer;
     private String color;
-    private ReentrantLock bufferLock;
 
-    public MyProducer(List<String> buffer, String color, ReentrantLock bufferLock) {
+
+    public MyProducer(ArrayBlockingQueue<String> buffer, String color) {
         this.buffer = buffer;
         this.color = color;
-        this.bufferLock = bufferLock;
     }
 
     @Override
@@ -85,62 +86,50 @@ class MyProducer implements Runnable {
         for (String num : nums) {
             try {
                 System.out.println(color + "Adding: " + num);
-                bufferLock.lock();           //  We are responsible to lock and unlock in reenterantLock. It doesn't happen automatically.
-                try {
-                    buffer.add(num);
-                } finally {
-                    bufferLock.unlock();
-                }
-
+                buffer.put(num);
                 Thread.sleep(random.nextInt(1000));
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
         System.out.println(color + "Adding color and EOF");
-        bufferLock.lock();
+
         try {
-            buffer.add("EOF");
-        } finally {
-            bufferLock.unlock();
+            buffer.put("EOF");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 }
 
 class MyConsumer implements Runnable {
-    private List<String> buffer;
+    private ArrayBlockingQueue<String> buffer;
     private String color;
-    private ReentrantLock bufferLock;
 
-    public MyConsumer(List<String> buffer, String color, ReentrantLock bufferLock) {
+    public MyConsumer(ArrayBlockingQueue<String> buffer, String color) {
         this.buffer = buffer;
         this.color = color;
-        this.bufferLock = bufferLock;
     }
 
     @Override
     public void run() {
-        int counter = 0;
 
         while (true) {
-            if (bufferLock.tryLock()) {
+            synchronized (buffer) {
                 try {
                     if (buffer.isEmpty()) {
                         continue;
                     }
-                    System.out.println(color + "Counter: " + counter);
-                    counter = 0;
-                    if (buffer.get(0).equals(EOF)) {
+                    if (buffer.peek().equals(EOF)) {
                         System.out.println(color + "Exiting");
                         break;
                     } else {
-                        System.out.println(color + "Removed: " + buffer.remove(0));
+                        System.out.println(color + "Removed: " + buffer.take());
                     }
-                } finally {
-                    bufferLock.unlock();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-            } else
-                counter++;
+            }
         }
     }
 }
